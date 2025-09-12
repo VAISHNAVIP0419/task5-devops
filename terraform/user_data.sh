@@ -1,45 +1,57 @@
 #!/bin/bash
 set -e
 
-# Install Docker
+# Log output
+exec > /var/log/user-data.log 2>&1
+
+# Variables
+MOUNT_POINT="/data1"
+DOCKER_DATA_ROOT="${MOUNT_POINT}/docker"
+
+echo "==== Updating system and installing Docker ===="
 apt-get update -y
 apt-get install -y docker.io curl
+
 systemctl enable docker
-systemctl start docker
-
-# Install Docker Compose
-curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-chmod +x /usr/local/bin/docker-compose
-
-# Setup EBS volume for Docker
-EBS_DEVICE="/dev/nvme1n1"
-DOCKER_DIR="/var/lib/docker"
-
-while [ ! -b $EBS_DEVICE ]; do
-  echo "Waiting for EBS device $EBS_DEVICE..."
-  sleep 5
-done
-
 systemctl stop docker || true
 
-if ! blkid $EBS_DEVICE; then
-    mkfs.ext4 $EBS_DEVICE
+echo "==== Installing Docker Compose ===="
+curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" \
+  -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+
+echo "==== Checking for extra EBS volume ===="
+# Find first non-root disk
+EBS_DEVICE=$(lsblk -dpno NAME | grep -v "nvme0n1" | head -n1 || true)
+
+if [ -n "$EBS_DEVICE" ]; then
+  echo "Found device: $EBS_DEVICE"
+
+  # Format if empty
+  if ! blkid "$EBS_DEVICE"; then
+    mkfs.ext4 -F "$EBS_DEVICE"
+  fi
+
+  # Mount it
+  mkdir -p "$MOUNT_POINT"
+  UUID=$(blkid -s UUID -o value "$EBS_DEVICE")
+  echo "UUID=$UUID $MOUNT_POINT ext4 defaults,nofail 0 2" >> /etc/fstab
+  mount -a
+else
+  echo "No extra disk found, using default root volume"
 fi
 
-mkdir -p $DOCKER_DIR
-mount $EBS_DEVICE $DOCKER_DIR
-grep -q "$EBS_DEVICE" /etc/fstab || echo "$EBS_DEVICE $DOCKER_DIR ext4 defaults,nofail 0 2" >> /etc/fstab
+echo "==== Setting Docker data-root ===="
+mkdir -p "$DOCKER_DATA_ROOT"
+cat > /etc/docker/daemon.json <<EOF
+{
+  "data-root": "${DOCKER_DATA_ROOT}"
+}
+EOF
 
-systemctl start docker
+systemctl restart docker
 
-# Add ubuntu user to docker group
-usermod -aG docker ubuntu
+echo "==== Adding ubuntu user to docker group ===="
+usermod -aG docker ubuntu || true
 
-# Deploy Jenkins & Nexus using docker-compose
-APP_DIR="/opt/app"
-mkdir -p $APP_DIR
-cd $APP_DIR
-
-curl -s -O https://raw.githubusercontent.com/VAISHNAVIP0419/task5-devops/main/docker/docker-compose.yml
-
-docker-compose up -d
+echo "==== Setup Finished at $(date) ===="
