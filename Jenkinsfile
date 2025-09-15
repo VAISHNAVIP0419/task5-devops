@@ -2,53 +2,41 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY_URL = "vnexus.vyturr.one:8081"
-        IMAGE_NAME   = "todo-docker-repo/todo-app"
-        IMAGE_TAG    = "latest"
+        NEXUS_REGISTRY = "vnexus.vyturr.one:8081"
+        IMAGE_NAME = "simple-flask-ci"
+        IMAGE_TAG = "latest"
+        CREDENTIALS_ID = "nexus-credentials"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/VAISHNAVIP0419/task5-devops.git'
+                git url: 'https://github.com/VAISHNAVIP0419/task5-devops.git', branch: 'main'
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh "docker build -t ${REGISTRY_URL}/${IMAGE_NAME}:${IMAGE_TAG} ."
+                    docker.build("${IMAGE_NAME}:${IMAGE_TAG}", "./app")
                 }
             }
         }
 
-        stage('Login to Nexus') {
+        stage('Push to Nexus') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'nexus-credentials', 
-                                                      passwordVariable: 'NEXUS_PASSWORD', 
-                                                      usernameVariable: 'NEXUS_USERNAME')]) {
-                        sh "echo $NEXUS_PASSWORD | docker login ${REGISTRY_URL} -u $NEXUS_USERNAME --password-stdin"
+                    docker.withRegistry("https://${env.NEXUS_REGISTRY}", "${env.CREDENTIALS_ID}") {
+                        docker.image("${IMAGE_NAME}:${IMAGE_TAG}").push()
                     }
                 }
             }
         }
 
-        stage('Push Image to Nexus') {
+        stage('Cleanup') {
             steps {
-                script {
-                    sh "docker push ${REGISTRY_URL}/${IMAGE_NAME}:${IMAGE_TAG}"
-                }
+                sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG} || true"
             }
-        }
-    }
-
-    post {
-        success {
-            echo "✅ Docker image pushed to Nexus successfully!"
-        }
-        failure {
-            echo "❌ Build or push failed!"
         }
     }
 }
