@@ -26,7 +26,7 @@ pipeline {
         stage('Push to Nexus') {
             steps {
                 script {
-                    docker.withRegistry("https://${env.NEXUS_REGISTRY}", "${env.CREDENTIALS_ID}") {
+                    docker.withRegistry("http://${env.NEXUS_REGISTRY}", "${env.CREDENTIALS_ID}") {
                         docker.image("${IMAGE_NAME}:${IMAGE_TAG}").push()
                     }
                 }
