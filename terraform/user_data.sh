@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-# Log output
-exec > /var/log/user-data.log 2>&1
-
 # Variables
 MOUNT_POINT="/data1"
 DOCKER_DATA_ROOT="${MOUNT_POINT}/docker"
@@ -20,7 +17,6 @@ curl -L "https://github.com/docker/compose/releases/latest/download/docker-compo
   -o /usr/local/bin/docker-compose
 chmod +x /usr/local/bin/docker-compose
 
-echo "==== Checking for extra EBS volume ===="
 # Find first non-root disk
 EBS_DEVICE=$(lsblk -dpno NAME | grep -v "nvme0n1" | head -n1 || true)
 
@@ -41,7 +37,6 @@ else
   echo "No extra disk found, using default root volume"
 fi
 
-echo "==== Setting Docker data-root ===="
 mkdir -p "$DOCKER_DATA_ROOT"
 cat > /etc/docker/daemon.json <<EOF
 {
@@ -50,8 +45,4 @@ cat > /etc/docker/daemon.json <<EOF
 EOF
 
 systemctl restart docker
-
-echo "==== Adding ubuntu user to docker group ===="
-usermod -aG docker ubuntu || true
-
-echo "==== Setup Finished at $(date) ===="
+usermod -aG docker ubuntu

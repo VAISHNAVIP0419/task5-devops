@@ -1,5 +1,4 @@
 version: "3.8"
-
 services:
   jenkins:
     image: jenkins/jenkins:lts
@@ -12,21 +11,8 @@ services:
     networks:
       - devops_net
 
-  nexus:
-    image: sonatype/nexus3:latest
-    container_name: nexus
-    restart: unless-stopped
-    ports:
-      - "8081:8081"
-    volumes:
-      - nexus_data:/nexus-data
-    networks:
-      - devops_net
-
 volumes:
   jenkins_data:
-    driver: local
-  nexus_data:
     driver: local
 
 networks:

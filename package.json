@@ -1,0 +1,8 @@
+{
+  "name": "simple-todo-app",
+  "version": "1.0.0",
+  "main": "simple_todo_app/src/app.js",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
