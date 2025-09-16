@@ -17,7 +17,7 @@ curl -L "https://github.com/docker/compose/releases/latest/download/docker-compo
   -o /usr/local/bin/docker-compose
 chmod +x /usr/local/bin/docker-compose
 
-# Find first non-root disk
+echo "==== Detecting extra EBS device and mounting ===="
 EBS_DEVICE=$(lsblk -dpno NAME | grep -v "nvme0n1" | head -n1 || true)
 
 if [ -n "$EBS_DEVICE" ]; then
@@ -31,18 +31,29 @@ if [ -n "$EBS_DEVICE" ]; then
   # Mount it
   mkdir -p "$MOUNT_POINT"
   UUID=$(blkid -s UUID -o value "$EBS_DEVICE")
-  echo "UUID=$UUID $MOUNT_POINT ext4 defaults,nofail 0 2" >> /etc/fstab
+
+  # Avoid duplicate fstab entries
+  grep -q "$UUID" /etc/fstab || echo "UUID=$UUID $MOUNT_POINT ext4 defaults,nofail 0 2" >> /etc/fstab
+
   mount -a
 else
   echo "No extra disk found, using default root volume"
 fi
 
+echo "==== Configuring Docker to use custom data-root ===="
 mkdir -p "$DOCKER_DATA_ROOT"
+
+# Stop Docker before editing config
+systemctl stop docker || true
+
 cat > /etc/docker/daemon.json <<EOF
 {
   "data-root": "${DOCKER_DATA_ROOT}"
 }
 EOF
 
+# Restart Docker after configuration
 systemctl restart docker
+
+# Add ubuntu user to docker group
 usermod -aG docker ubuntu
